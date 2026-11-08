@@ -246,12 +246,15 @@ ARA call sites: none (the web app is an alternative client; ARA supersedes it on
 - `get_dark_build_progress` {} → { `active` (bool), `exposure_index`, `exposure_count`,
   `exposure_ms`, `frame`, `frame_count` (all zero/false when idle; indices 1-based) } —
   progress of an in-flight `build_dark_library` / `build_defect_map_darks`. The build RPCs
-  run synchronously on the main thread but now `wxYield()` between dark frames (the same
-  pattern the GUI dark dialog uses), so both servers keep answering while a build runs and
-  clients can poll this method to drive a progress bar. To keep that yield safe, while a
-  build is active the capture-starting RPCs (`guide`, `loop`, `dither`, `guide_pulse`,
-  `capture_single_frame`, `set_connected`, both build methods, `rebuild_defect_map`) are
-  rejected with "dark-frame capture in progress".
+  run on the main thread, but each dark frame is captured on a thread of its own while the
+  main thread pumps the event loop (#100; until 2.2.0 the loop ran only between frames, so an
+  RPC sent during a frame waited for the whole exposure plus the camera's retries, and a
+  client with a 5 s per-call timeout declared the guider down), so both servers answer within
+  milliseconds while a build runs and clients can poll this method to drive a progress bar.
+  To keep that pump safe, while a build is active the capture-starting RPCs (`guide`, `loop`,
+  `dither`, `guide_pulse`, `capture_single_frame`, `set_connected`, both build methods,
+  `rebuild_defect_map`), the profile switches (`set_profile`, `set_profile_by_name`,
+  `delete_profile`) and `shutdown` are rejected with "dark-frame capture in progress".
   ARA call sites: none yet (added for the web app's Darks tab; available to ARA's dark
   flows if useful).
 

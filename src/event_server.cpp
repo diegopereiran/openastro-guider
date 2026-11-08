@@ -57,6 +57,7 @@
 #include <algorithm>
 #include <atomic>
 #include <sstream>
+#include <thread>
 #include <string.h>
 
 #if defined(ALPACA_CAMERA) || defined(GUIDE_ALPACA) || defined(ROTATOR_ALPACA)
@@ -1019,12 +1020,13 @@ static bool pa_session_active()
     } while (0)
 // clang-format on
 
-// Dark-library / defect-map dark-capture progress. The build RPCs run
-// synchronously on the main thread but wxYield() between frames (the same
-// pattern the GUI dark dialog uses), so the servers stay responsive and
-// clients can poll get_dark_build_progress to drive a progress bar. The
-// active flag also guards capture-starting RPCs that could otherwise
-// re-enter mid-build through that same Yield.
+// Dark-library / defect-map dark-capture progress. The build RPCs run on the
+// main thread, but each frame is captured on a thread of its own while the
+// main thread pumps the event loop (capture_dark_frame_pumping_events, #100),
+// so the servers stay responsive and clients can poll get_dark_build_progress
+// to drive a progress bar. The active flag also guards capture-starting RPCs,
+// profile switches and shutdown, which could otherwise re-enter mid-capture
+// through that pump.
 static struct DarkBuildProgress
 {
     bool active = false;
@@ -1946,6 +1948,7 @@ static void set_profile(JObj& response, const json_value *params)
     }
 
     VERIFY_GUIDER(response);
+    VERIFY_NO_DARK_BUILD(response); // a profile switch deletes the camera a dark capture is using (#100)
 
     wxString errMsg;
     bool error = pFrame->pGearDialog->SetProfile(id->int_value, &errMsg);
@@ -2158,6 +2161,7 @@ static void set_profile_by_name(JObj& response, const json_value *params)
     }
 
     VERIFY_GUIDER(response);
+    VERIFY_NO_DARK_BUILD(response); // a profile switch deletes the camera a dark capture is using (#100)
 
     wxString errMsg;
     bool error = pFrame->pGearDialog->SetProfile(profileId, &errMsg);
@@ -2387,6 +2391,7 @@ static void delete_profile(JObj& response, const json_value *params)
         response << jrpc_error(1, "cannot delete profile while equipment is connected");
         return;
     }
+    VERIFY_NO_DARK_BUILD(response); // the build writes this profile's dark files when it ends (#100)
 
     int profileId = 0;
     wxString err;
@@ -4230,6 +4235,37 @@ static bool IsValidBinning(GuideCamera *camera, int binning, wxString *message)
     return false;
 }
 
+// Issue #100: a dark frame's capture blocks for the exposure plus the camera's
+// own retries (behind AlpacaBridge a 1.5 s dark took 7.6 s), and the main
+// thread is the JSON-RPC and HTTP event loop, so every RPC that arrived during
+// a frame waited for it. A client with a 5 s per-call timeout saw each
+// get_dark_build_progress poll and liveness ping time out, declared the guider
+// down and reconnected in the middle of the build (OpenAstro Ara, 2026-11-08).
+// Capture on a thread of its own and pump the event loop until it returns, as
+// the Yield between frames already does, so the servers answer within
+// milliseconds for the whole build. GuideCamera::Capture runs off the main
+// thread in normal guiding (the worker thread); WorkerThread::MilliSleep and
+// InterruptRequested treat a thread that is not the worker as uninterruptible,
+// and MyFrame::Alert and the camera's DisconnectWithAlert post events when
+// they are not on the main thread. The RPCs the pump could let in are guarded
+// by VERIFY_NO_DARK_BUILD (capture starters, profile switches, shutdown).
+static bool capture_dark_frame_pumping_events(usImage& frame, const CaptureParams& captureParams)
+{
+    std::atomic<bool> done(false);
+    bool err = false;
+    std::thread capture([&]() {
+        err = GuideCamera::Capture(pCamera, frame, captureParams);
+        done.store(true, std::memory_order_release);
+    });
+    while (!done.load(std::memory_order_acquire))
+    {
+        wxYield();
+        wxMilliSleep(10);
+    }
+    capture.join();
+    return err;
+}
+
 static bool capture_master_dark_frame(usImage& darkFrame, int expTimeMs, int frameCount, wxString *error)
 {
     if (!pCamera || !pCamera->Connected)
@@ -4269,7 +4305,7 @@ static bool capture_master_dark_frame(usImage& darkFrame, int expTimeMs, int fra
         captureParams.gain = pCamera->GuideCameraGain;
         captureParams.captureOptions = CAPTURE_DARK;
 
-        bool err = GuideCamera::Capture(pCamera, darkFrame, captureParams);
+        bool err = capture_dark_frame_pumping_events(darkFrame, captureParams);
         if (err)
         {
             pCamera->ShutterClosed = false;
@@ -5386,6 +5422,9 @@ static void dither(JObj& response, const json_value *params)
 
 static void shutdown(JObj& response, const json_value *params)
 {
+    // A dark capture runs on its own thread while the main thread pumps events (#100); an exit from inside
+    // that pump would tear the camera down under it. The build ends within one exposure; ask again then.
+    VERIFY_NO_DARK_BUILD(response);
     wxGetApp().TerminateApp();
 
     response << jrpc_result(0);
