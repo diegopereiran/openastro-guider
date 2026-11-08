@@ -1069,8 +1069,7 @@ static void end_dark_build()
     if (s_reconnectDeferredForDarkBuild)
     {
         s_reconnectDeferredForDarkBuild = false;
-        Debug.Write("dark build ended: running the camera reconnect it deferred
-");
+        Debug.Write("dark build ended: running the camera reconnect it deferred\n");
         pFrame->CallAfter([]() { pFrame->TryReconnect(); });
     }
 }
