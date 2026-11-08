@@ -692,7 +692,9 @@ void GearDialog::OnChoiceCamera(wxCommandEvent& event)
 {
     if (DarkBuildActive())
     {
-        // A dark capture is using m_pCamera on its own thread (#100); the build ends within one exposure.
+        // A dark capture is using m_pCamera on its own thread (#100); the build ends within one exposure. The
+        // choice widget already shows the new name, so put the camera in use back.
+        SetMatchingSelection(m_pCameras, pConfig->Profile.GetString("/camera/LastMenuChoice", wxEmptyString));
         pFrame->Alert(_("Dark-frame capture in progress; try again when the build has finished."));
         return;
     }
@@ -834,6 +836,12 @@ void GearDialog::OnMenuSelectCamera(wxCommandEvent& event)
 
 void GearDialog::OnButtonSetupCamera(wxCommandEvent& event)
 {
+    if (DarkBuildActive())
+    {
+        // The property dialog reconfigures the camera a dark capture is using on its own thread (#100).
+        pFrame->Alert(_("Dark-frame capture in progress; try again when the build has finished."));
+        return;
+    }
     m_pCamera->ShowPropertyDialog();
 
     // camera setup may have changed camera name so re-load the camera list
