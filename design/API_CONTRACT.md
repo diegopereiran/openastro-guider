@@ -254,7 +254,10 @@ ARA call sites: none (the web app is an alternative client; ARA supersedes it on
   To keep that pump safe, while a build is active the capture-starting RPCs (`guide`, `loop`,
   `dither`, `guide_pulse`, `capture_single_frame`, `set_connected`, both build methods,
   `rebuild_defect_map`), the profile switches (`set_profile`, `set_profile_by_name`,
-  `delete_profile`) and `shutdown` are rejected with "dark-frame capture in progress".
+  `delete_profile`), the camera setters the capture reads (`set_exposure`, `set_camera_gain`,
+  `set_camera_timeout`, `set_use_subframes`, `set_camera_saturation`, `set_cooler_state`,
+  `set_cooler_setpoint`) and `shutdown` are rejected with "dark-frame capture in progress";
+  the Gear dialog's camera connect, disconnect and selection refuse the same way.
   ARA call sites: none yet (added for the web app's Darks tab; available to ARA's dark
   flows if useful).
 

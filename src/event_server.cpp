@@ -858,6 +858,7 @@ struct Params
 
 static void set_exposure(JObj& response, const json_value *params)
 {
+    VERIFY_NO_DARK_BUILD(response); // a dark capture reads this camera state on its own thread (#100)
     Params p("exposure", params);
     const json_value *exp = p.param("exposure");
 
@@ -1040,6 +1041,11 @@ static struct DarkBuildProgress
     // emits <artifact>FrameComplete without knowing which build it serves.
     wxString artifact;
 } s_darkBuild;
+
+bool DarkBuildActive()
+{
+    return s_darkBuild.active;
+}
 
 // clang-format off
 #define VERIFY_NO_DARK_BUILD(response) \
@@ -6093,6 +6099,7 @@ static void get_camera_gain(JObj& response, const json_value *params)
 // Set the camera gain (0..100).
 static void set_camera_gain(JObj& response, const json_value *params)
 {
+    VERIFY_NO_DARK_BUILD(response); // a dark capture reads this camera state on its own thread (#100)
     if (!pCamera)
     {
         response << jrpc_error(JSONRPC_SERVER_ERROR, "camera not connected");
@@ -6134,6 +6141,7 @@ static void get_camera_timeout(JObj& response, const json_value *params)
 // so reject values below it rather than silently raising them.
 static void set_camera_timeout(JObj& response, const json_value *params)
 {
+    VERIFY_NO_DARK_BUILD(response); // a dark capture reads this camera state on its own thread (#100)
     if (!pCamera)
     {
         response << jrpc_error(JSONRPC_SERVER_ERROR, "camera not connected");
@@ -6459,6 +6467,7 @@ static void set_noise_reduction(JObj& response, const json_value *params)
 // Enable/disable camera subframes (get_use_subframes reads the current value).
 static void set_use_subframes(JObj& response, const json_value *params)
 {
+    VERIFY_NO_DARK_BUILD(response); // a dark capture reads this camera state on its own thread (#100)
     if (!pCamera || !pCamera->Connected)
     {
         response << jrpc_error(JSONRPC_SERVER_ERROR, "camera not connected");
@@ -6485,6 +6494,7 @@ static void set_use_subframes(JObj& response, const json_value *params)
 // Set the cooler target temperature (°C). get_cooler_status reports the setpoint.
 static void set_cooler_setpoint(JObj& response, const json_value *params)
 {
+    VERIFY_NO_DARK_BUILD(response); // a dark capture reads this camera state on its own thread (#100)
     if (!pCamera || !pCamera->Connected)
     {
         response << jrpc_error(JSONRPC_SERVER_ERROR, "camera not connected");
@@ -6528,6 +6538,7 @@ static void get_camera_saturation(JObj& response, const json_value *params)
 // fields keep their current value (the two are applied together).
 static void set_camera_saturation(JObj& response, const json_value *params)
 {
+    VERIFY_NO_DARK_BUILD(response); // a dark capture reads this camera state on its own thread (#100)
     if (!pCamera || !pCamera->Connected)
     {
         response << jrpc_error(JSONRPC_SERVER_ERROR, "camera not connected");
@@ -6940,6 +6951,7 @@ static void get_calibration_data(JObj& response, const json_value *params)
 
 static void set_cooler_state(JObj& response, const json_value *params)
 {
+    VERIFY_NO_DARK_BUILD(response); // a dark capture reads this camera state on its own thread (#100)
     Params p("enabled", params);
     const json_value *val = p.param("enabled");
     bool enable;

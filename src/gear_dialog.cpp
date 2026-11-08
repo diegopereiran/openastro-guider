@@ -690,6 +690,12 @@ void GearDialog::OnChar(wxKeyEvent& evt)
 
 void GearDialog::OnChoiceCamera(wxCommandEvent& event)
 {
+    if (DarkBuildActive())
+    {
+        // A dark capture is using m_pCamera on its own thread (#100); the build ends within one exposure.
+        pFrame->Alert(_("Dark-frame capture in progress; try again when the build has finished."));
+        return;
+    }
     try
     {
         wxString choice = m_pCameras->GetStringSelection();
@@ -1011,6 +1017,11 @@ bool GearDialog::DoConnectCamera(bool autoReconnecting)
 void GearDialog::OnButtonConnectCamera(wxCommandEvent& event)
 {
     Debug.Write("gear_dialog: OnButtonConnectCamera\n");
+    if (DarkBuildActive())
+    {
+        pFrame->Alert(_("Dark-frame capture in progress; try again when the build has finished."));
+        return;
+    }
     DoConnectCamera(false);
 }
 
@@ -1025,6 +1036,13 @@ bool GearDialog::ReconnectCamera()
 void GearDialog::OnButtonDisconnectCamera(wxCommandEvent& event)
 {
     Debug.Write("gear_dialog: OnButtonDisconnectCamera\n");
+
+    if (DarkBuildActive())
+    {
+        // A dark capture is using m_pCamera on its own thread (#100); the build ends within one exposure.
+        pFrame->Alert(_("Dark-frame capture in progress; try again when the build has finished."));
+        return;
+    }
 
     try
     {
