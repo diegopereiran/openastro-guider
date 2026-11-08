@@ -858,7 +858,13 @@ struct Params
 
 static void set_exposure(JObj& response, const json_value *params)
 {
-    VERIFY_NO_DARK_BUILD(response); // a dark capture reads this camera state on its own thread (#100)
+    // VERIFY_NO_DARK_BUILD is defined further down; same refusal (#100): a dark capture reads the dark selection on
+    // its own thread.
+    if (DarkBuildActive())
+    {
+        response << jrpc_error(1, "dark-frame capture in progress");
+        return;
+    }
     Params p("exposure", params);
     const json_value *exp = p.param("exposure");
 
