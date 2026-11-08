@@ -1318,6 +1318,16 @@ void MyFrame::TryReconnect()
 
 void MyFrame::DoTryReconnect()
 {
+    if (DarkBuildActive())
+    {
+        // #100: a dark frame is being captured on its own thread, and the camera driver's own timeout inside that
+        // capture is what queued this reconnect; the capture thread is still unwinding through the camera object.
+        // The build fails on that frame, and runs the reconnect once its capture has returned.
+        Debug.Write("camera reconnect deferred: dark-frame capture in progress\n");
+        DeferCameraReconnectUntilDarkBuildEnds();
+        return;
+    }
+
     // do not reconnect more than 3 times in 1 minute
     enum
     {
@@ -2106,6 +2116,17 @@ double MyFrame::CurrentGuideErrorSmoothed() const
 
 void MyFrame::OnClose(wxCloseEvent& event)
 {
+    if (DarkBuildActive() && event.CanVeto())
+    {
+        // #100: a dark frame is being captured on its own thread while this event loop runs; pGearDialog->Shutdown()
+        // below would disconnect the camera under it. The build ends within one exposure; the RPC `shutdown` is
+        // refused the same way. A close that cannot be vetoed (an OS session end) goes on regardless.
+        Debug.Write("MyFrame::OnClose vetoed: dark-frame capture in progress\n");
+        Alert(_("Dark-frame capture in progress; close again when the build has finished."));
+        event.Veto();
+        return;
+    }
+
     if (CaptureActive && event.CanVeto())
     {
         bool confirmed = ConfirmDialog::Confirm(_("Are you sure you want to exit while capturing is active?"),
