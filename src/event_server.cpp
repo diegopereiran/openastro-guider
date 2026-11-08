@@ -4253,10 +4253,12 @@ static bool capture_dark_frame_pumping_events(usImage& frame, const CaptureParam
 {
     std::atomic<bool> done(false);
     bool err = false;
-    std::thread capture([&]() {
-        err = GuideCamera::Capture(pCamera, frame, captureParams);
-        done.store(true, std::memory_order_release);
-    });
+    std::thread capture(
+        [&]()
+        {
+            err = GuideCamera::Capture(pCamera, frame, captureParams);
+            done.store(true, std::memory_order_release);
+        });
     while (!done.load(std::memory_order_acquire))
     {
         wxYield();
