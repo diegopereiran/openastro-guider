@@ -1318,6 +1318,16 @@ void MyFrame::TryReconnect()
 
 void MyFrame::DoTryReconnect()
 {
+    if (DarkBuildActive())
+    {
+        // #100: a dark frame is being captured on its own thread, and the camera driver's own timeout inside that
+        // capture is what queued this reconnect; the capture thread is still unwinding through the camera object.
+        // The build fails on that frame, and runs the reconnect once its capture has returned.
+        Debug.Write("camera reconnect deferred: dark-frame capture in progress\n");
+        DeferCameraReconnectUntilDarkBuildEnds();
+        return;
+    }
+
     // do not reconnect more than 3 times in 1 minute
     enum
     {

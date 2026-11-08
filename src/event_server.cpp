@@ -1053,6 +1053,28 @@ bool DarkBuildActive()
     return s_darkBuild.active;
 }
 
+// #100: a camera auto-reconnect that a dark capture's own timeout raised mid-frame runs once the build has ended,
+// on the next event-loop turn, not from inside the pump while the capture thread is still unwinding.
+static bool s_reconnectDeferredForDarkBuild = false;
+
+void DeferCameraReconnectUntilDarkBuildEnds()
+{
+    s_reconnectDeferredForDarkBuild = true;
+}
+
+// Ends a dark-library or defect-map build: clears the progress and runs a reconnect the build deferred.
+static void end_dark_build()
+{
+    s_darkBuild = DarkBuildProgress();
+    if (s_reconnectDeferredForDarkBuild)
+    {
+        s_reconnectDeferredForDarkBuild = false;
+        Debug.Write("dark build ended: running the camera reconnect it deferred
+");
+        pFrame->CallAfter([]() { pFrame->TryReconnect(); });
+    }
+}
+
 // clang-format off
 #define VERIFY_NO_DARK_BUILD(response) \
     do { \
@@ -4472,7 +4494,7 @@ static void run_dark_library_build(long frameCount, const std::vector<int>& sele
 {
     struct DarkBuildScope
     {
-        ~DarkBuildScope() { s_darkBuild = DarkBuildProgress(); }
+        ~DarkBuildScope() { end_dark_build(); }
     } darkBuildScope;
     s_darkBuild.active = true;
     s_darkBuild.exposure_count = (int) selected.size();
@@ -4663,7 +4685,7 @@ static void run_defect_map_build(long exposureMs, long frameCount, bool loadAfte
 {
     struct DarkBuildScope
     {
-        ~DarkBuildScope() { s_darkBuild = DarkBuildProgress(); }
+        ~DarkBuildScope() { end_dark_build(); }
     } darkBuildScope;
     s_darkBuild.active = true;
     s_darkBuild.exposure_count = 1;
