@@ -4289,7 +4289,24 @@ static bool capture_dark_frame_pumping_events(usImage& frame, const CaptureParam
     std::thread capture(
         [&]()
         {
-            err = GuideCamera::Capture(pCamera, frame, captureParams);
+            // The camera code throws wxString through ERROR_INFO / THROW_INFO; an exception that left this
+            // thread's function would std::terminate the daemon, where the worker thread (HandleExpose) fails
+            // the frame. Same here.
+            try
+            {
+                err = GuideCamera::Capture(pCamera, frame, captureParams);
+            }
+            catch (const wxString& msg)
+            {
+                POSSIBLY_UNUSED(msg);
+                Debug.Write(wxString::Format("dark capture threw: %s\n", msg));
+                err = true;
+            }
+            catch (...)
+            {
+                Debug.Write("dark capture threw an unknown exception\n");
+                err = true;
+            }
             done.store(true, std::memory_order_release);
         });
     while (!done.load(std::memory_order_acquire))

@@ -2116,6 +2116,17 @@ double MyFrame::CurrentGuideErrorSmoothed() const
 
 void MyFrame::OnClose(wxCloseEvent& event)
 {
+    if (DarkBuildActive() && event.CanVeto())
+    {
+        // #100: a dark frame is being captured on its own thread while this event loop runs; pGearDialog->Shutdown()
+        // below would disconnect the camera under it. The build ends within one exposure; the RPC `shutdown` is
+        // refused the same way. A close that cannot be vetoed (an OS session end) goes on regardless.
+        Debug.Write("MyFrame::OnClose vetoed: dark-frame capture in progress\n");
+        Alert(_("Dark-frame capture in progress; close again when the build has finished."));
+        event.Veto();
+        return;
+    }
+
     if (CaptureActive && event.CanVeto())
     {
         bool confirmed = ConfirmDialog::Confirm(_("Are you sure you want to exit while capturing is active?"),
