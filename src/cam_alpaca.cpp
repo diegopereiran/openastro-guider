@@ -39,6 +39,7 @@
 # include "camera.h"
 # include "config_alpaca.h"
 # include "alpaca_client.h"
+# include "alpaca_errors.h"
 # include "image_math.h"
 # include <wx/stopwatch.h>
 # include <sstream>
@@ -699,6 +700,13 @@ bool CameraAlpaca::AbortExposure()
     return !result;
 }
 
+// The server's message says why (for example "camera removed from USB"); it goes into the
+// EquipmentDisconnected reason so clients can show it.
+static wxString NotConnectedReason(const wxString& serverMessage)
+{
+    return wxString::Format(_("The Alpaca server reports the camera as not connected: %s"), serverMessage);
+}
+
 bool CameraAlpaca::Capture(usImage& img, const CaptureParams& captureParams)
 {
     int duration = captureParams.duration;
@@ -845,10 +853,14 @@ bool CameraAlpaca::Capture(usImage& img, const CaptureParams& captureParams)
     wxString startExposureEndpoint = wxString::Format("camera/%ld/startexposure", m_deviceNumber);
     wxString params = wxString::Format("Duration=%.3f&Light=%s", duration / 1000.0, takeDark ? "false" : "true");
     long errorCode = 0;
-    if (!m_client->PutAction(startExposureEndpoint, "StartExposure", params, &errorCode))
+    wxString errorMessage;
+    if (!m_client->PutAction(startExposureEndpoint, "StartExposure", params, &errorCode, &errorMessage))
     {
         Debug.Write(wxString::Format("Alpaca_StartExposure failed, HTTP %ld\n", errorCode));
-        pFrame->Alert(_("Alpaca error -- Cannot start exposure with given parameters"));
+        if (AlpacaErrors::CaptureNeedsReconnect(errorCode))
+            DisconnectWithAlert(NotConnectedReason(errorMessage), RECONNECT);
+        else
+            pFrame->Alert(_("Alpaca error -- Cannot start exposure with given parameters"));
         return true;
     }
 
@@ -876,10 +888,13 @@ bool CameraAlpaca::Capture(usImage& img, const CaptureParams& captureParams)
         wxMilliSleep(20);
         bool ready = false;
         wxString imageReadyEndpoint = wxString::Format("camera/%ld/imageready", m_deviceNumber);
-        if (!m_client->GetBool(imageReadyEndpoint, &ready, &errorCode))
+        if (!m_client->GetBool(imageReadyEndpoint, &ready, &errorCode, &errorMessage))
         {
             Debug.Write(wxString::Format("Alpaca_ImageReady failed, HTTP %ld\n", errorCode));
-            pFrame->Alert(_("Exception thrown polling camera"));
+            if (AlpacaErrors::CaptureNeedsReconnect(errorCode))
+                DisconnectWithAlert(NotConnectedReason(errorMessage), RECONNECT);
+            else
+                pFrame->Alert(_("Exception thrown polling camera"));
             return true;
         }
         if (ready)
@@ -961,7 +976,10 @@ bool CameraAlpaca::Capture(usImage& img, const CaptureParams& captureParams)
                 errorMessage = wxString(payload.substr(dataStart).c_str(), wxConvUTF8);
             }
             Debug.Write(wxString::Format("Alpaca Camera: ImageBytes error %u: %s\n", errorNumber, errorMessage));
-            pFrame->Alert(_("Error reading image"));
+            if (AlpacaErrors::CaptureNeedsReconnect(errorNumber))
+                DisconnectWithAlert(NotConnectedReason(errorMessage), RECONNECT);
+            else
+                pFrame->Alert(_("Error reading image"));
             return true;
         }
 

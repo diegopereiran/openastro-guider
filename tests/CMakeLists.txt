@@ -260,6 +260,18 @@ set_property(TARGET test_alpaca_gain PROPERTY FOLDER "Unit tests")
 add_test(NAME test_alpaca_gain COMMAND test_alpaca_gain)
 
 ############################################################################
+# test_alpaca_errors  --  alpaca_errors.cpp: which Alpaca capture errors
+# disconnect the camera with reconnect (#103). std-only.
+############################################################################
+add_executable(test_alpaca_errors
+  ${PHD_TESTS_DIR}/camera/test_alpaca_errors.cpp
+  ${phd_src_dir}/alpaca_errors.cpp
+)
+target_link_libraries(test_alpaca_errors PRIVATE phd_test_common)
+set_property(TARGET test_alpaca_errors PROPERTY FOLDER "Unit tests")
+add_test(NAME test_alpaca_errors COMMAND test_alpaca_errors)
+
+############################################################################
 # test_connect_request  --  connect_request.cpp: device names and the
 # refuse-while-busy rules for per-device set_connected (#84). std-only.
 ############################################################################
