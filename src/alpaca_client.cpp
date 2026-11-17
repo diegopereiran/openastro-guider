@@ -32,44 +32,21 @@
  */
 
 #include "alpaca_client.h"
+#include "alpaca_errors.h"
 
 namespace
 {
+// The parsing itself is the wx-free AlpacaErrors::ReadError (unit tested in test_alpaca_errors).
 bool ExtractAlpacaError(const json_value *root, int *errorNumber, wxString *errorMessage)
 {
-    if (!root || root->type != JSON_OBJECT)
-        return false;
-
-    int number = 0;
-    wxString message;
-    json_for_each(n, root)
-    {
-        if (!n->name)
-            continue;
-
-        if (strcmp(n->name, "ErrorNumber") == 0)
-        {
-            if (n->type == JSON_INT)
-            {
-                number = n->int_value;
-            }
-            else if (n->type == JSON_FLOAT)
-            {
-                number = static_cast<int>(n->float_value);
-            }
-        }
-        else if (strcmp(n->name, "ErrorMessage") == 0 && n->type == JSON_STRING)
-        {
-            message = wxString(n->string_value, wxConvUTF8);
-        }
-    }
-
+    long number = 0;
+    std::string message;
+    bool isError = AlpacaErrors::ReadError(root, &number, &message);
     if (errorNumber)
-        *errorNumber = number;
+        *errorNumber = static_cast<int>(number);
     if (errorMessage)
-        *errorMessage = message;
-
-    return number != 0;
+        *errorMessage = wxString(message.c_str(), wxConvUTF8);
+    return isError;
 }
 } // namespace
 
@@ -583,7 +560,8 @@ bool AlpacaClient::GetRaw(const wxString& endpoint, const wxString& acceptHeader
     return true;
 }
 
-bool AlpacaClient::Put(const wxString& endpoint, const wxString& params, JsonParser& parser, long *errorCode)
+bool AlpacaClient::Put(const wxString& endpoint, const wxString& params, JsonParser& parser, long *errorCode,
+                       wxString *errorMessage)
 {
     if (!m_curl)
     {
@@ -676,6 +654,10 @@ bool AlpacaClient::Put(const wxString& endpoint, const wxString& params, JsonPar
         if (errorCode)
         {
             *errorCode = alpacaErrorNumber;
+        }
+        if (errorMessage)
+        {
+            *errorMessage = alpacaErrorMessage;
         }
         return false;
     }

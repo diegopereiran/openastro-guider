@@ -69,7 +69,8 @@ public:
              wxString *errorMessage = nullptr);
     bool GetRaw(const wxString& endpoint, const wxString& acceptHeader, std::string *response, std::string *contentType,
                 long *errorCode = nullptr);
-    bool Put(const wxString& endpoint, const wxString& params, JsonParser& parser, long *errorCode = nullptr);
+    bool Put(const wxString& endpoint, const wxString& params, JsonParser& parser, long *errorCode = nullptr,
+             wxString *errorMessage = nullptr);
     bool GetDouble(const wxString& endpoint, double *value, long *errorCode = nullptr);
     bool GetInt(const wxString& endpoint, int *value, long *errorCode = nullptr);
     bool GetBool(const wxString& endpoint, bool *value, long *errorCode = nullptr, wxString *errorMessage = nullptr);
