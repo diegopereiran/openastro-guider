@@ -1053,8 +1053,9 @@ bool DarkBuildActive()
     return s_darkBuild.active;
 }
 
-// #100: a camera auto-reconnect that a dark capture's own timeout raised mid-frame runs once the build has ended,
-// on the next event-loop turn, not from inside the pump while the capture thread is still unwinding.
+// #100: a camera auto-reconnect that a dark capture's error raised mid-frame (its timeout, or an Alpaca 1031 / repeated
+// 1280, #103) runs once the build has ended, on the next event-loop turn, not from inside the pump while the capture
+// thread is still unwinding. No exposure is pending then, so DoTryReconnect only sends the events.
 static bool s_reconnectDeferredForDarkBuild = false;
 
 void DeferCameraReconnectUntilDarkBuildEnds()
@@ -4315,6 +4316,10 @@ static bool capture_dark_frame_pumping_events(usImage& frame, const CaptureParam
         wxMilliSleep(10);
     }
     capture.join();
+    // Deliver what the capture queued for the main thread on its way out (an EquipmentDisconnected, an Alert,
+    // a camera reconnect, which DoTryReconnect defers to the build's end), so a client sees the disconnect
+    // before the build reports the failed frame (#103).
+    wxYield();
     return err;
 }
 
