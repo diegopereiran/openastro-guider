@@ -149,9 +149,21 @@ bool PhdController::Guide(unsigned int options, const SettleParams& settle, cons
     return true;
 }
 
+// Put back the sticky-lock setting that STATE_CALIBRATE forced on for the calibration. Once only:
+// every way out of the calibration (success, a failed start, an abort) comes through here.
+static void restore_sticky_lock(void)
+{
+    if (ctrl.useStickyLock && ctrl.haveSaveSticky)
+    {
+        pFrame->pGuider->SetLockPosIsSticky(ctrl.saveSticky);
+        ctrl.haveSaveSticky = false;
+    }
+}
+
 static void do_fail(const wxString& msg)
 {
     Debug.AddLine(wxString::Format("PhdController failed: %s", msg));
+    restore_sticky_lock();
     ctrl.succeeded = false;
     ctrl.errorMsg = msg;
     SETSTATE(STATE_FINISH);
@@ -331,6 +343,9 @@ void PhdController::UpdateControllerState(void)
         case STATE_SETUP:
             Debug.AddLine("PhdController: setup");
             ctrl.haveSaveSticky = false;
+            // a request that ends before it settles (an abort while it waits for a calibration) reports 0 frames,
+            // not the counts of the settle before it
+            ctrl.settleFrameCount = ctrl.droppedFrameCount = 0;
             ctrl.autoFindAttemptsRemaining = 3;
             ctrl.overrideDecGuideMode = false; // guide stop/start with no dithering
             SETSTATE(STATE_ATTEMPT_START);
@@ -465,9 +480,7 @@ void PhdController::UpdateControllerState(void)
 
                 if (!start_guiding())
                 {
-                    if (ctrl.useStickyLock && ctrl.haveSaveSticky)
-                        pFrame->pGuider->SetLockPosIsSticky(ctrl.saveSticky);
-                    do_fail(_T("could not start calibration"));
+                    do_fail(_T("could not start calibration")); // puts the sticky-lock setting back
                     break;
                 }
 
@@ -483,8 +496,7 @@ void PhdController::UpdateControllerState(void)
         case STATE_CALIBRATION_WAIT:
             if ((!pMount || pMount->IsCalibrated()) && (!pSecondaryMount || pSecondaryMount->IsCalibrated()))
             {
-                if (ctrl.useStickyLock && ctrl.haveSaveSticky)
-                    pFrame->pGuider->SetLockPosIsSticky(ctrl.saveSticky);
+                restore_sticky_lock();
 
                 SETSTATE(STATE_SETTLE_BEGIN);
             }

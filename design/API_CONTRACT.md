@@ -363,7 +363,8 @@ next `guide` is refused as in progress. The rules are in the wx-free `src/restor
 - `restore_calibration` {} → bool. Puts back the calibration saved in the profile for every mount
   (the mount, and the AO when one is used). A `guide` request still waiting on the failed
   calibration is ended first (`PhdController::AbortController`): its `SettleDone` has `Status` 1
-  and `Error` "calibration failed; saved calibration restored", and the next `guide` is accepted,
+  and `Error` "calibration failed; saved calibration restored" (`TotalFrames`/`DroppedFrames` 0),
+  the sticky-lock setting the calibration forced on is put back, and the next `guide` is accepted,
   so ARA can go `CalibrationFailed` → `restore_calibration` → `guide` without `stop_capture`.
   `true`: restored and every mount calibrated. `false`: some mount has no saved calibration and
   nothing changed (no partial AO restore, a waiting request is not ended), or the restored
