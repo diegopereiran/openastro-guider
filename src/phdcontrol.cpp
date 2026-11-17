@@ -110,6 +110,13 @@ bool PhdController::IsIdle()
     return ctrl.state == STATE_IDLE;
 }
 
+// A guide request is waiting for a calibration to complete. The wait has no failure check: when the
+// calibration fails the request stays here until something aborts it.
+bool PhdController::IsWaitingForCalibration()
+{
+    return ctrl.state == STATE_CALIBRATION_WAIT;
+}
+
 #define SETSTATE(newstate)                                                                                                     \
     do                                                                                                                         \
     {                                                                                                                          \

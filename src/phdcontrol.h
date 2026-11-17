@@ -65,6 +65,7 @@ public:
 
     static bool IsSettling();
     static bool IsIdle(); // Not currently working through various transitions in guiding state
+    static bool IsWaitingForCalibration(); // A guide request is waiting for a calibration to complete
 };
 
 #endif

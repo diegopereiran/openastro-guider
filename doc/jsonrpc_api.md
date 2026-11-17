@@ -403,8 +403,11 @@ Alpaca discovery/query:
   - flips calibration data for pier-side style inversion
 
 - `restore_calibration`
-  - puts back the last calibration saved in the profile, after a failed recalibration erased it
-  - returns `true` when every mount is calibrated afterwards, `false` when nothing was saved
+  - puts back the last calibration saved in the profile (for the mount, and for the AO when one is used), after a `guide` with `recalibrate: true` erased it and the calibration failed
+  - after `CalibrationFailed` the guider keeps looping and the `guide` request stays open, waiting for the calibration, so another `guide` is refused as in progress; `restore_calibration` ends that request before it restores: the request's `SettleDone` arrives with `Status: 1` and `Error: "calibration failed; saved calibration restored"`. So `CalibrationFailed` → `restore_calibration` → `guide` works without `stop_capture`
+  - result `true`: restored, and every mount is calibrated
+  - result `false`: either some mount has no saved calibration in the profile, and nothing was changed (no partial AO restore, and a waiting `guide` request is not ended; `stop_capture` ends it); or the calibration was restored (and a waiting request ended) but is not usable with the current Dec guide mode (an RA-only calibration while the Dec guide mode is `Auto`, `North` or `South`), which `get_calibrated` also reports as `false`
+  - error `1` (nothing changed): calibrating or guiding; the mount or AO not connected; a guide or dither request in progress that is not waiting on a calibration
 
 - `guide_pulse`
   - params:
@@ -785,7 +788,7 @@ This section is normative for integrator behavior. Each method entry describes:
 | `get_calibrated` | none | none | `bool` | none expected | none |
 | `clear_calibration` | optional `which:string` (`mount|ao|both`) | none | `0` | `-32602` invalid `which` | mount/AO calibration cleared |
 | `flip_calibration` | none | none | `0` | `1` flip failure | calibration parity/geometry flipped; `CalibrationDataFlipped` event |
-| `restore_calibration` | none | none | `true`/`false` | `1` while calibrating or guiding | last saved calibration back on the mount; `false` when none was saved |
+| `restore_calibration` | none | guider context must exist; not calibrating or guiding; mount (and AO, if used) connected; no guide/dither request in progress other than one waiting on a failed calibration | `true` restored and every mount calibrated; `false` some mount has no saved calibration (nothing changed) or the restored calibration is not usable with the current Dec guide mode (`get_calibrated` agrees) | `1` calibrating or guiding, mount/AO not connected, or a guide/dither request in progress | saved calibration loaded on every mount; a `guide` request still waiting on the failed calibration is ended first with `SettleDone` `Status:1`, `Error:"calibration failed; saved calibration restored"` |
 | `guide_pulse` | `amount:int`, `direction:string`, optional `which` (`mount|ao`) | target device connected; guider must not be calibrating/guiding; target not busy | `0` | `1` invalid args, invalid `which`, not connected, busy/calibrating/guiding | manual pulse scheduled |
 | `get_calibration_data` | optional `which` (`mount|ao`) | selected device must be connected | `{calibrated,...}` | `1` invalid `which` or device not connected | none |
 
