@@ -8796,7 +8796,8 @@ void EventServer::NotifyCalibrationBuildFailed(const wxString& artifact, const w
 // The disconnect state machine is fully observable from the stream:
 //   EquipmentDisconnected{reconnecting:true}
 //     -> EquipmentReconnected               (auto-reconnect succeeded), or
-//     -> EquipmentReconnectFailed           (throttle gave up — terminal).
+//     -> EquipmentReconnectFailed           (the reconnect attempt failed, or the
+//                                            throttle gave up — terminal).
 
 void EventServer::NotifyEquipmentDisconnected(const wxString& deviceType, const wxString& reason, bool reconnecting)
 {
@@ -8818,9 +8819,10 @@ void EventServer::NotifyEquipmentReconnected(const wxString& deviceType)
     do_notify(m_eventServerClients, ev);
 }
 
-// Terminal event when the auto-reconnect throttle gives up: a client that keyed
-// off EquipmentDisconnected{reconnecting:true} can stop waiting instead of
-// hanging forever on a permanent unplug.
+// Terminal event when the auto-reconnect fails: either the reconnect attempt
+// itself failed or the throttle gave up. A client that keyed off
+// EquipmentDisconnected{reconnecting:true} can stop waiting instead of hanging
+// forever on a permanent unplug.
 void EventServer::NotifyEquipmentReconnectFailed(const wxString& deviceType, int attempts, const wxString& reason)
 {
     if (m_eventServerClients.empty())
