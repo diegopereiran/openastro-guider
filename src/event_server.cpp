@@ -41,6 +41,7 @@
 #include "imaging_gear_alpaca.h"
 #include "webui_rpc_guard.h"
 #include "connect_request.h"
+#include "restore_calibration.h"
 #include "capture_cleanup.h"
 
 #include <wx/dir.h>
@@ -4018,6 +4019,59 @@ static void clear_calibration(JObj& response, const json_value *params)
     response << jrpc_result(0);
 }
 
+// whether the profile holds a calibration for the mount (the key MyFrame::LoadCalibration looks for)
+static bool has_saved_calibration(const Mount *mount)
+{
+    return pConfig->Profile.HasEntry("/" + mount->GetMountClassName() + "/calibration/timestamp");
+}
+
+// Puts back the last calibration saved in the profile, the one a failed recalibration erased from the
+// mount. A guide request left waiting for that failed calibration is ended first, so the client can
+// guide again. The rules are in restore_calibration.cpp. The result says whether every mount is
+// calibrated afterwards; false when some mount has no saved calibration (nothing changed) or the
+// restored one is not usable with the current Dec guide mode.
+static void restore_calibration(JObj& response, const json_value *params)
+{
+    VERIFY_GUIDER(response);
+
+    RestoreCalibrationState s;
+    s.calibratingOrGuiding = pFrame->pGuider->IsCalibratingOrGuiding();
+    s.primaryIsAo = pMount && pMount->IsStepGuider();
+    s.primaryConnected = pMount && pMount->IsConnected();
+    s.secondaryPresent = pSecondaryMount != nullptr;
+    s.secondaryConnected = pSecondaryMount && pSecondaryMount->IsConnected();
+    s.primarySaved = pMount && has_saved_calibration(pMount);
+    s.secondarySaved = pSecondaryMount && has_saved_calibration(pSecondaryMount);
+    s.controllerIdle = PhdController::IsIdle();
+    s.controllerWaitingForCalibration = PhdController::IsWaitingForCalibration();
+
+    RestoreCalibrationDecision d = DecideRestoreCalibration(s);
+    switch (d.action)
+    {
+    case RestoreCalibrationAction::Refuse:
+        response << jrpc_error(1, wxString(d.error));
+        return;
+
+    case RestoreCalibrationAction::NothingSaved:
+        response << jrpc_result(false);
+        return;
+
+    case RestoreCalibrationAction::EndStaleGuideThenRestore:
+        // the request's SettleDone reports the failure, and the controller is idle for the next guide
+        Debug.Write("restore_calibration: ending the guide request left waiting for the failed calibration\n");
+        PhdController::AbortController(RESTORE_CALIBRATION_ABORT_REASON);
+        break;
+
+    case RestoreCalibrationAction::Restore:
+        break;
+    }
+
+    pFrame->LoadCalibration();
+
+    bool calibrated = pMount->IsCalibrated() && (!pSecondaryMount || pSecondaryMount->IsCalibrated());
+    response << jrpc_result(calibrated);
+}
+
 static void flip_calibration(JObj& response, const json_value *params)
 {
     bool error = pFrame->FlipCalibrationData();
@@ -7208,6 +7262,7 @@ static const RpcMethod *rpc_methods(size_t *count)
         { "get_calibration_progress", &get_calibration_progress },
         { "get_version", &get_version },
         { "flip_calibration", &flip_calibration },
+        { "restore_calibration", &restore_calibration },
         { "get_lock_shift_enabled", &get_lock_shift_enabled },
         { "set_lock_shift_enabled", &set_lock_shift_enabled },
         { "get_lock_shift_params", &get_lock_shift_params },

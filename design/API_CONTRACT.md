@@ -352,3 +352,26 @@ override took effect); switching wheel/rotator/focuser by override writes no `IN
 line, and switching cameras doesn't end an exposure in the log; an unreported device name is now
 empty in the snapshot (`unknown` in the log as before, `null` in JSON). Shapes pinned by fixtures
 in `test_jsonrpc_schema`. ARA call sites: none yet.
+
+## 2026-11-17 — restore_calibration (#102)
+
+`guide` with `recalibrate: true` erases the calibration before it calibrates; when that calibration
+fails the mount is left uncalibrated, and the `guide` request stays waiting for the calibration
+(PhdController's calibration wait has no failure check) while the guider keeps looping, so the
+next `guide` is refused as in progress. The rules are in the wx-free `src/restore_calibration.cpp`
+(unit-tested by `test_restore_calibration`).
+
+- `restore_calibration` {} → bool. Puts back the calibration saved in the profile for every mount
+  (the mount, and the AO when one is used). A `guide` request still waiting on the failed
+  calibration is ended first (`PhdController::AbortController`): its `SettleDone` has `Status` 1
+  and `Error` "calibration failed; saved calibration restored" (`TotalFrames`/`DroppedFrames` 0),
+  the sticky-lock setting the calibration forced on is put back, and the next `guide` is accepted,
+  so ARA can go `CalibrationFailed` → `restore_calibration` → `guide` without `stop_capture`.
+  `true`: restored and every mount calibrated. `false`: some mount has no saved calibration and
+  nothing changed (no partial AO restore, a waiting request is not ended), or the restored
+  calibration is not usable with the current Dec guide mode (RA-only calibration with Dec
+  Auto/North/South; `get_calibrated` agrees). Error 1, nothing changed: calibrating or guiding;
+  the mount or AO not connected; a guide or dither request in progress that is not waiting on a
+  calibration. Refused over `/api/rpc` while calibrating or guiding, like every other setter.
+
+ARA call sites: none yet (meant for the recovery after `CalibrationFailed` on a forced recalibration).

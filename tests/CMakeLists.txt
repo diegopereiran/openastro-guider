@@ -296,3 +296,16 @@ add_executable(test_capture_cleanup
 target_link_libraries(test_capture_cleanup PRIVATE phd_test_common)
 set_property(TARGET test_capture_cleanup PROPERTY FOLDER "Unit tests")
 add_test(NAME test_capture_cleanup COMMAND test_capture_cleanup)
+
+############################################################################
+# test_restore_calibration  --  restore_calibration.cpp: when
+# restore_calibration is refused, returns false or ends a stale guide
+# request before restoring (#102). std-only.
+############################################################################
+add_executable(test_restore_calibration
+  ${PHD_TESTS_DIR}/calibration/test_restore_calibration.cpp
+  ${phd_src_dir}/restore_calibration.cpp
+)
+target_link_libraries(test_restore_calibration PRIVATE phd_test_common)
+set_property(TARGET test_restore_calibration PROPERTY FOLDER "Unit tests")
+add_test(NAME test_restore_calibration COMMAND test_restore_calibration)
